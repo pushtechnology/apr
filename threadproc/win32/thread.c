@@ -132,9 +132,7 @@ APR_DECLARE(apr_status_t) apr_thread_create(apr_thread_t **new,
 APR_DECLARE(apr_status_t) apr_thread_exit(apr_thread_t *thd,
                                           apr_status_t retval)
 {
-    thd->exitval = retval;
-    apr_pool_destroy(thd->pool);
-    thd->pool = NULL;
+    thd->exitval = retval | 0x1000;
 #ifndef _WIN32_WCE
     _endthreadex(0);
 #else
@@ -155,8 +153,11 @@ APR_DECLARE(apr_status_t) apr_thread_join(apr_status_t *retval,
     rv = WaitForSingleObject(thd->td, INFINITE);
     if ( rv == WAIT_OBJECT_0 || rv == WAIT_ABANDONED) {
         /* If the thread_exit has been called */
-        if (!thd->pool)
-            *retval = thd->exitval;
+        if (thd->exitval & 0x1000) {
+            apr_pool_destroy(thd->pool);
+            thd->pool = NULL;
+            *retval = (thd->exitval & 0xEFFF);
+        }
         else
             rv = APR_INCOMPLETE;
     }
